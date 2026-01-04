@@ -1,0 +1,27 @@
+package Nhom2Cum1.SmLearning.entity;
+
+import jakarta.persistence.*;
+import lombok.Data;
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "quiz_results")
+@Data
+public class QuizResult {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne
+    @JoinColumn(name = "student_id")
+    private Student student;
+
+    @ManyToOne
+    @JoinColumn(name = "lesson_id")
+    private Lesson lesson;
+
+    private Float score;
+
+    @Column(name = "taken_at")
+    private LocalDateTime takenAt = LocalDateTime.now();
+}

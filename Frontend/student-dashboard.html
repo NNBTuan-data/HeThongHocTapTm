@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background-color: #f4f4f9; }
+        header { background-color: #0056b3; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .container { padding: 20px; max-width: 1200px; margin: 20px auto; }
+        .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { margin-top: 0; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+        .btn { padding: 8px 15px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px; cursor: pointer; border: none; font-size: 0.9rem; }
+        .btn:hover { background-color: #0056b3; }
+        .logout-btn { background: #dc3545; }
+        .logout-btn:hover { background: #c82333; }
+        .loading-spinner { text-align: center; padding: 20px; }
+        .error-message { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Student Dashboard</h1>
+        <div>
+            <span id="userName">User</span>
+            <button onclick="logout()" class="btn logout-btn" style="margin-left: 15px;">Logout</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <h2>My Courses</h2>
+            <div id="coursesList"><div class="loading-spinner">Loading Courses...</div></div>
+        </div>
+
+        <div class="card">
+            <h2>My Progress</h2>
+            <div id="progressContainer"><div class="loading-spinner">Loading Progress...</div></div>
+        </div>
+
+        <div class="card">
+            <h2>Recommendations For You</h2>
+            <div id="recommendationsList"><div class="loading-spinner">Loading Recommendations...</div></div>
+        </div>
+    </div>
+
+    <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        const authHeader = localStorage.getItem('authHeader');
+
+        if (!user || user.role !== 'STUDENT') {
+            window.location.href = 'auth.html';
+        }
+
+        document.getElementById('userName').innerText = user.fullName;
+
+        async function fetchData(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': authHeader }
+            });
+            if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+            return response.json();
+        }
+
+        async function loadDashboard() {
+            const studentId = user.profileId;
+            if (!studentId) {
+                alert('Could not determine student profile. Please log in again.');
+                logout();
+                return;
+            }
+
+            // Load Courses
+            try {
+                const courses = await fetchData('http://localhost:8080/api/student/courses');
+                const coursesHtml = courses.map(c => `
+                    <div style="border-bottom: 1px solid #eee; padding: 10px 0; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h3>${c.courseName}</h3>
+                            <p>${c.description || 'No description available.'}</p>
+                        </div>
+                        <button class="btn" onclick="viewCourse(${c.id})">View Course</button>
+                    </div>
+                `).join('');
+                document.getElementById('coursesList').innerHTML = courses.length > 0 ? coursesHtml : '<p>No courses available.</p>';
+            } catch (e) {
+                document.getElementById('coursesList').innerHTML = `<p class="error-message">Could not load courses. ${e.message}</p>`;
+            }
+
+            // Load Progress
+            try {
+                const progress = await fetchData(`http://localhost:8080/api/student/${studentId}/progress`);
+                const progressHtml = `
+                    <table id="progressTable">
+                        <thead><tr><th>Lesson</th><th>Status</th><th>Score</th><th>Last Updated</th></tr></thead>
+                        <tbody>
+                            ${progress.map(p => `
+                                <tr>
+                                    <td>${p.lesson ? p.lesson.lessonTitle : 'Unknown'}</td>
+                                    <td>${p.completed ? 'Completed' : 'In Progress'}</td>
+                                    <td>${p.score || '-'}</td>
+                                    <td>${new Date(p.updatedAt).toLocaleDateString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                document.getElementById('progressContainer').innerHTML = progress.length > 0 ? progressHtml : '<p>No progress tracked yet.</p>';
+            } catch (e) {
+                document.getElementById('progressContainer').innerHTML = `<p class="error-message">Could not load progress. ${e.message}</p>`;
+            }
+
+            // Load Recommendations
+            try {
+                const recs = await fetchData(`http://localhost:8080/api/student/${studentId}/recommendations`);
+                const recsHtml = recs.map(r => `
+                    <div style="padding: 10px; background: #e9ecef; margin-bottom: 5px; border-radius: 4px;">
+                        <strong>${r.material ? r.material.title : 'Material'}</strong>
+                        <p>${r.reason}</p>
+                        <a href="${r.material ? r.material.url : '#'}" target="_blank">Open Material</a>
+                    </div>
+                `).join('');
+                document.getElementById('recommendationsList').innerHTML = recs.length > 0 ? recsHtml : '<p>No recommendations yet.</p>';
+            } catch (e) {
+                document.getElementById('recommendationsList').innerHTML = `<p class="error-message">Could not load recommendations. ${e.message}</p>`;
+            }
+        }
+
+        function viewCourse(courseId) {
+            window.location.href = `course-details.html?id=${courseId}`;
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'auth.html';
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

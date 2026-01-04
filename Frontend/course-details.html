@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Details</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background-color: #f4f4f9; }
+        header { background-color: #0056b3; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .container { padding: 20px; max-width: 900px; margin: 20px auto; }
+        .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2, h3 { margin-top: 0; color: #333; }
+        .lesson { border-left: 3px solid #007bff; padding-left: 15px; margin-bottom: 20px; }
+        .material { background: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px; }
+        .material a { text-decoration: none; color: #0056b3; font-weight: bold; }
+        .back-link { color: white; text-decoration: none; font-size: 1rem; }
+        .loading-spinner { text-align: center; padding: 20px; }
+        .error-message { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Course Details</h1>
+        <a href="student-dashboard.html" class="back-link">&larr; Back to Dashboard</a>
+    </header>
+
+    <div class="container">
+        <div id="course-container">
+            <div class="loading-spinner">Loading Course...</div>
+        </div>
+    </div>
+
+    <script>
+        const authHeader = localStorage.getItem('authHeader');
+        const urlParams = new URLSearchParams(window.location.search);
+        const courseId = urlParams.get('id');
+
+        if (!courseId) {
+            alert('No course ID provided.');
+            window.location.href = 'student-dashboard.html';
+        }
+
+        async function fetchData(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': authHeader }
+            });
+            if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+            return response.json();
+        }
+
+        async function loadCourseDetails() {
+            const container = document.getElementById('course-container');
+            try {
+                const [course, lessons] = await Promise.all([
+                    fetchData(`http://localhost:8080/api/student/courses/${courseId}`),
+                    fetchData(`http://localhost:8080/api/student/courses/${courseId}/lessons`)
+                ]);
+
+                let lessonsHtml = '';
+                if (lessons.length > 0) {
+                    for (const lesson of lessons) {
+                        const materials = await fetchData(`http://localhost:8080/api/student/lessons/${lesson.id}/materials`);
+                        const materialsHtml = materials.map(m => `
+                            <div class="material">
+                                <a href="${m.url}" target="_blank">${m.title}</a> [${m.materialType}] - Difficulty: ${m.difficultyLevel}
+                            </div>
+                        `).join('');
+
+                        lessonsHtml += `
+                            <div class="lesson">
+                                <h3>${lesson.lessonTitle}</h3>
+                                <p>${lesson.content || ''}</p>
+                                ${materials.length > 0 ? materialsHtml : '<p>No materials for this lesson.</p>'}
+                            </div>
+                        `;
+                    }
+                }
+
+                container.innerHTML = `
+                    <div class="card">
+                        <h2 id="courseName">${course.courseName}</h2>
+                        <p id="courseDescription">${course.description}</p>
+                    </div>
+                    <div class="card">
+                        <h2>Lessons</h2>
+                        <div id="lessonsList">${lessons.length > 0 ? lessonsHtml : '<p>No lessons in this course yet.</p>'}</div>
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error('Error loading course details:', error);
+                container.innerHTML = `<p class="error-message">Error loading course content. ${error.message}</p>`;
+            }
+        }
+
+        loadCourseDetails();
+    </script>
+</body>
+</html>

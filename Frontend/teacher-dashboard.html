@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background-color: #f4f4f9; }
+        header { background-color: #218838; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .container { padding: 20px; max-width: 1200px; margin: 20px auto; }
+        .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { margin-top: 0; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+        .btn { padding: 8px 15px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px; cursor: pointer; border: none; font-size: 0.9rem; }
+        .btn:hover { background-color: #218838; }
+        .logout-btn { background: #dc3545; }
+        .logout-btn:hover { background: #c82333; }
+        .loading-spinner { text-align: center; padding: 20px; }
+        .error-message { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Teacher Dashboard</h1>
+        <div>
+            <span id="userName">User</span>
+            <button onclick="logout()" class="btn logout-btn" style="margin-left: 15px;">Logout</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="card">
+            <h2>My Courses</h2>
+            <div id="myCoursesList"><div class="loading-spinner">Loading Courses...</div></div>
+        </div>
+
+        <div class="card">
+            <h2>Student Roster</h2>
+            <div id="studentsContainer"><div class="loading-spinner">Loading Students...</div></div>
+        </div>
+    </div>
+
+    <script>
+        const user = JSON.parse(localStorage.getItem('user'));
+        const authHeader = localStorage.getItem('authHeader');
+
+        if (!user || user.role !== 'TEACHER') {
+            window.location.href = 'auth.html';
+        }
+
+        document.getElementById('userName').innerText = user.fullName;
+
+        async function fetchData(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': authHeader }
+            });
+            if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+            return response.json();
+        }
+
+        async function loadDashboard() {
+            const teacherId = user.profileId;
+            if (!teacherId) {
+                alert('Could not determine teacher profile. Please log in again.');
+                logout();
+                return;
+            }
+
+            // Load Teacher's Courses
+            try {
+                const courses = await fetchData(`http://localhost:8080/api/teacher/${teacherId}/courses`);
+                const coursesHtml = courses.map(c => `
+                    <div style="border-bottom: 1px solid #eee; padding: 10px 0;">
+                        <h3>${c.courseName}</h3>
+                        <p>${c.description || 'No description available.'}</p>
+                    </div>
+                `).join('');
+                document.getElementById('myCoursesList').innerHTML = courses.length > 0 ? coursesHtml : '<p>No courses assigned.</p>';
+            } catch (e) {
+                document.getElementById('myCoursesList').innerHTML = `<p class="error-message">Could not load courses. ${e.message}</p>`;
+            }
+
+            // Load Students
+            try {
+                const students = await fetchData('http://localhost:8080/api/teacher/students');
+                const studentsHtml = `
+                    <table id="studentsTable">
+                        <thead><tr><th>Student Code</th><th>Name</th><th>Major</th><th>Actions</th></tr></thead>
+                        <tbody>
+                            ${students.map(s => `
+                                <tr>
+                                    <td>${s.studentCode || 'N/A'}</td>
+                                    <td>${s.user.fullName}</td>
+                                    <td>${s.major || 'N/A'}</td>
+                                    <td>
+                                        <button class="btn" onclick="viewStudentProgress(${s.id})">View Progress</button>
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+                document.getElementById('studentsContainer').innerHTML = students.length > 0 ? studentsHtml : '<p>No students found.</p>';
+            } catch (e) {
+                document.getElementById('studentsContainer').innerHTML = `<p class="error-message">Could not load students. ${e.message}</p>`;
+            }
+        }
+
+        function viewStudentProgress(studentId) {
+            window.location.href = `student-details.html?id=${studentId}`;
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'auth.html';
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>

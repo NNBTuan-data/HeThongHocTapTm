@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Details</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; background-color: #f4f4f9; }
+        header { background-color: #218838; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .container { padding: 20px; max-width: 900px; margin: 20px auto; }
+        .card { background: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1, h2 { margin-top: 0; color: #333; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; }
+        .back-link { color: white; text-decoration: none; font-size: 1rem; }
+        .loading-spinner { text-align: center; padding: 20px; }
+        .error-message { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Student Details</h1>
+        <a href="teacher-dashboard.html" class="back-link">&larr; Back to Dashboard</a>
+    </header>
+
+    <div class="container" id="details-container">
+        <div class="loading-spinner">Loading Student Details...</div>
+    </div>
+
+    <script>
+        const authHeader = localStorage.getItem('authHeader');
+        const urlParams = new URLSearchParams(window.location.search);
+        const studentId = urlParams.get('id');
+
+        if (!studentId) {
+            alert('No student ID provided.');
+            window.location.href = 'teacher-dashboard.html';
+        }
+
+        async function fetchData(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': authHeader }
+            });
+            if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+            return response.json();
+        }
+
+        async function loadStudentDetails() {
+            const container = document.getElementById('details-container');
+            try {
+                const [student, progress, quizzes] = await Promise.all([
+                    fetchData(`http://localhost:8080/api/teacher/student/${studentId}`),
+                    fetchData(`http://localhost:8080/api/teacher/student/${studentId}/progress`),
+                    fetchData(`http://localhost:8080/api/student/${studentId}/quiz-results`)
+                ]);
+
+                const progressHtml = progress.length > 0 ? progress.map(p => `
+                    <tr>
+                        <td>${p.lesson.lessonTitle}</td>
+                        <td>${p.completed ? 'Completed' : 'In Progress'}</td>
+                        <td>${p.score || '-'}</td>
+                    </tr>
+                `).join('') : '<tr><td colspan="3">No progress data.</td></tr>';
+
+                const quizHtml = quizzes.length > 0 ? quizzes.map(q => `
+                    <tr>
+                        <td>${q.lesson.lessonTitle}</td>
+                        <td>${q.score}</td>
+                        <td>${new Date(q.takenAt).toLocaleString()}</td>
+                    </tr>
+                `).join('') : '<tr><td colspan="3">No quiz results.</td></tr>';
+
+                container.innerHTML = `
+                    <div class="card">
+                        <h2>${student.user.fullName}</h2>
+                        <p><strong>Student Code:</strong> ${student.studentCode || 'N/A'}</p>
+                        <p><strong>Major:</strong> ${student.major || 'N/A'}</p>
+                    </div>
+                    <div class="card">
+                        <h2>Learning Progress</h2>
+                        <table>
+                            <thead><tr><th>Lesson</th><th>Status</th><th>Score</th></tr></thead>
+                            <tbody>${progressHtml}</tbody>
+                        </table>
+                    </div>
+                    <div class="card">
+                        <h2>Quiz Results</h2>
+                        <table>
+                            <thead><tr><th>Lesson</th><th>Score</th><th>Date Taken</th></tr></thead>
+                            <tbody>${quizHtml}</tbody>
+                        </table>
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error('Error loading student details:', error);
+                container.innerHTML = `<p class="error-message">Error loading student details. ${error.message}</p>`;
+            }
+        }
+
+        loadStudentDetails();
+    </script>
+</body>
+</html>
